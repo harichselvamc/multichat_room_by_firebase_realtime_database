@@ -24,8 +24,8 @@ html, body, #root { height: 100%; margin: 0; font-family: Inter, Roboto, "Helvet
 .gs-input:-webkit-autofill,
 .gs-input::placeholder,
 .gs-input:-ms-input-placeholder {
-  color: #0F172A;              /* primary readable text color */
-  background: #ffffff;         /* keep panel-like white background */
+  color: #0F172A;          /* primary readable text color */
+  background: #ffffff;        /* keep panel-like white background */
   border: 1px solid #E2E6EA;
   padding: 8px 10px;
   border-radius: 10px;
@@ -59,7 +59,7 @@ html, body, #root { height: 100%; margin: 0; font-family: Inter, Roboto, "Helvet
 /* Disabled inputs - keep text readable but de-emphasized */
 .gs-input:disabled,
 .gs-input[aria-disabled="true"] {
-  opacity: 0.9;               /* don't hide text */
+  opacity: 0.9;            /* don't hide text */
   color: #6B7280;
   background: #F8FAFC;
   cursor: not-allowed;
