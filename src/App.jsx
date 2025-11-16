@@ -13,6 +13,7 @@ import {
   limitToLast,
 } from "firebase/database";
 import { v4 as uuidv4 } from "uuid";
+import "./App.css";
 
 export default function App() {
   const [roomId, setRoomId] = useState("");
@@ -26,20 +27,18 @@ export default function App() {
   const roomRef = useRef(null);
   const messagesRef = useRef(null);
   const participantsRef = useRef(null);
-  const chatBoxRef = useRef(null);
+  const chatEndRef = useRef(null);
 
-  // Persist user ID
+  // Persist user ID once
   useEffect(() => {
     localStorage.setItem("chat_user_id", userIdRef.current);
   }, []);
 
-  // Auto-scroll chat
+  // Auto-scroll to last message smoothly
   useEffect(() => {
-    const box = chatBoxRef.current;
-    if (!box) return;
-    setTimeout(() => {
-      box.scrollTop = box.scrollHeight;
-    }, 40);
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
   }, [messages]);
 
   // Create new room
@@ -71,18 +70,21 @@ export default function App() {
     });
 
     try {
+      // schedule remove on disconnect
       onDisconnect(pRef).remove();
-    } catch {}
+    } catch (err) {
+      // some environments may not support onDisconnect; ignore
+    }
 
-    // Watch participants
-    onValue(participantsRef.current, (snap) => {
+    // subscribe to participants
+    const unsubParticipants = onValue(participantsRef.current, (snap) => {
       const val = snap.val() || {};
       setParticipants(val);
     });
 
-    // Watch messages
+    // subscribe to last 200 messages
     const recentQuery = query(messagesRef.current, limitToLast(200));
-    onChildAdded(recentQuery, (snap) => {
+    const unsubMessages = onChildAdded(recentQuery, (snap) => {
       const val = snap.val();
       if (!val) return;
 
@@ -100,12 +102,32 @@ export default function App() {
       });
     });
 
-    // Ensure room exists
-    onValue(roomRef.current, (snap) => {
-      if (!snap.exists()) {
-        set(roomRef.current, { createdAt: Date.now() });
-      }
-    }, { onlyOnce: true });
+    // ensure room exists (create if empty)
+    const unsubRoom = onValue(
+      roomRef.current,
+      (snap) => {
+        if (!snap.exists()) {
+          set(roomRef.current, { createdAt: Date.now() });
+        }
+      },
+      { onlyOnce: true }
+    );
+
+    // cleanup function for this join (keeps listeners tidy)
+    const cleanup = () => {
+      try {
+        unsubParticipants && typeof unsubParticipants === "function" && unsubParticipants();
+      } catch {}
+      try {
+        unsubMessages && typeof unsubMessages === "function" && unsubMessages();
+      } catch {}
+      try {
+        unsubRoom && typeof unsubRoom === "function" && unsubRoom();
+      } catch {}
+    };
+
+    // store cleanup so leaveRoom/unmount can call it
+    roomRef.current._cleanup = cleanup;
   }
 
   // Leave room
@@ -114,6 +136,11 @@ export default function App() {
 
     try {
       await remove(ref(db, `rooms/${roomId}/participants/${userIdRef.current}`));
+    } catch {}
+
+    // run firebase listener cleanup if present
+    try {
+      roomRef.current && roomRef.current._cleanup && roomRef.current._cleanup();
     } catch {}
 
     setInRoom(false);
@@ -142,92 +169,153 @@ export default function App() {
 
   function timeStr(ts) {
     if (!ts) return "-";
-    return new Date(ts).toLocaleTimeString();
+    return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
-  const styles = {
-    container: { maxWidth: 900, margin: "28px auto", padding: 20 },
-    grid: { display: "grid", gridTemplateColumns: "1fr 300px", gap: 12, marginTop: 12 },
-    chatBox: { height: 420, overflowY: "auto", border: "1px solid #eee", padding: 12, borderRadius: 10, background: "#fff" },
-    bubbleMe: { alignSelf: "flex-end", background: "#1769aa", color: "#fff", padding: "8px 10px", borderRadius: 10, maxWidth: "80%" },
-    bubblePeer: { alignSelf: "flex-start", background: "#f1f3f5", color: "#111", padding: "8px 10px", borderRadius: 10, maxWidth: "80%" },
-  };
+  // Small helper: initials
+  function initialsFor(n) {
+    if (!n) return "?";
+    return n
+      .split(" ")
+      .map((s) => s[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase();
+  }
 
   return (
-    <div style={styles.container}>
-      <h2>Chatr — Firebase Chatroom</h2>
+    <div className="app">
+      <header className="header" role="banner">
+        <div className="brand">
+          <h1>Chatr</h1>
+          <span className="muted">— realtime Firebase chat</span>
+        </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="your display name"
-          style={{ padding: 8, borderRadius: 8, border: "1px solid #ddd" }}
-        />
+        <div className="header-controls" aria-hidden={false}>
+          <label className="sr-only" htmlFor="displayNameInput">
+            Display name
+          </label>
+          <input
+            id="displayNameInput"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Your display name"
+            className="input name-input"
+            aria-label="Display name"
+          />
 
-        <button onClick={createRoom} disabled={inRoom}>Create room</button>
+          <button type="button" onClick={createRoom} disabled={inRoom} className="btn">
+            Create
+          </button>
 
-        <input
-          placeholder="room id"
-          value={roomId}
-          onChange={(e) => setRoomId(e.target.value)}
-          style={{ padding: 8, borderRadius: 8, border: "1px solid #ddd", width: 150 }}
-        />
-        <button onClick={() => joinRoom(roomId)} disabled={inRoom || !roomId}>Join</button>
-        <button onClick={leaveRoom} disabled={!inRoom}>Leave</button>
-      </div>
+          <input
+            aria-label="Room ID"
+            placeholder="room id"
+            value={roomId}
+            onChange={(e) => setRoomId(e.target.value)}
+            className="input room-input"
+          />
+          <button
+            type="button"
+            onClick={() => joinRoom(roomId)}
+            disabled={inRoom || !roomId}
+            className="btn"
+          >
+            Join
+          </button>
+          <button type="button" onClick={leaveRoom} disabled={!inRoom} className="btn secondary">
+            Leave
+          </button>
+        </div>
+      </header>
 
-      <div style={styles.grid}>
-        {/* Chat column */}
-        <div>
-          <b>Chat (room: {roomId || "-"})</b>
+      <main className="main" role="main">
+        <section className="chat-column" aria-live="polite" aria-label={`Chat room ${roomId || "none"}`}>
+          <div className="chat-title">
+            <strong>Chat</strong>
+            <span className="muted"> room: {roomId || "-"}</span>
+          </div>
 
-          <div ref={chatBoxRef} style={styles.chatBox}>
-            {messages.length === 0 && <div>No messages yet...</div>}
+          <div className="chat-box" role="log" aria-relevant="additions">
+            {messages.length === 0 && <div className="empty">No messages yet — say hi 👋</div>}
 
             {messages.map((m) => {
               const mine = m.fromId === userIdRef.current;
               return (
-                <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: mine ? "flex-end" : "flex-start", marginBottom: 12 }}>
-                  <div style={mine ? styles.bubbleMe : styles.bubblePeer}>
-                    <div style={{ fontWeight: 600 }}>{mine ? "You" : m.fromName}</div>
-                    <div>{m.text}</div>
-                    <div style={{ fontSize: 12, marginTop: 4 }}>{timeStr(m.at)}</div>
+                <div
+                  key={m.id}
+                  className={`message-row ${mine ? "message-me" : "message-peer"}`}
+                >
+                  {!mine && (
+                    <div className="avatar" aria-hidden="true">{initialsFor(m.fromName)}</div>
+                  )}
+
+                  <div className="message-bubble" aria-label={`${mine ? "You" : m.fromName} message`}>
+                    <div className="msg-meta">
+                      <span className="msg-sender">{mine ? "You" : m.fromName}</span>
+                      <span className="msg-time" aria-hidden="true">{timeStr(m.at)}</span>
+                    </div>
+                    <div className="msg-text">{m.text}</div>
                   </div>
+
+                  {mine && <div className="spacer-avatar" aria-hidden="true" />}
                 </div>
               );
             })}
+
+            <div ref={chatEndRef} />
           </div>
 
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <div className="composer" role="form" aria-label="Send message">
             <input
+              className="input composer-input"
               value={localText}
               onChange={(e) => setLocalText(e.target.value)}
-              placeholder="Type a message..."
-              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              style={{ flex: 1, padding: 8, borderRadius: 8, border: "1px solid #ddd" }}
+              placeholder={inRoom ? "Type a message..." : "Join a room to chat"}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  sendMessage();
+                }
+              }}
+              disabled={!inRoom}
+              aria-disabled={!inRoom}
             />
-            <button onClick={sendMessage} disabled={!inRoom || !localText.trim()}>Send</button>
+            <button
+              type="button"
+              onClick={sendMessage}
+              disabled={!inRoom || !localText.trim()}
+              className="btn send-btn"
+              aria-label="Send message"
+            >
+              Send
+            </button>
           </div>
-        </div>
+        </section>
 
-        {/* Participants column */}
-        <div>
-          <b>Participants ({Object.keys(participants).length})</b>
+        <aside className="participants-column" aria-label="Participants">
+          <div className="participants-head">
+            <strong>Participants</strong>
+            <span className="muted">({Object.keys(participants).length})</span>
+          </div>
 
-          <div style={{ marginTop: 8, border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
-            {Object.keys(participants).length === 0 && <div>No users online</div>}
+          <div className="participants-box">
+            {Object.keys(participants).length === 0 && <div className="empty">No users online</div>}
 
-            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            <ul className="participants-list">
               {Object.values(participants).map((p) => (
-                <li key={p.id} style={{ marginBottom: 8 }}>
-                  <b>{p.name}</b> — {p.id === userIdRef.current ? "you" : "peer"}
+                <li key={p.id} className="participant">
+                  <div className="avatar">{initialsFor(p.name)}</div>
+                  <div className="participant-info">
+                    <div className="participant-name">{p.name}</div>
+                    <div className="participant-sub muted">{p.id === userIdRef.current ? "you" : "peer"}</div>
+                  </div>
                 </li>
               ))}
             </ul>
           </div>
-        </div>
-      </div>
+        </aside>
+      </main>
     </div>
   );
 }
