@@ -1,5 +1,5 @@
-/* src/App.css - GoatSloth (Option A: Modern chat) */
-/* Mobile-first, responsive */
+/* src/App.css — Fix: input text/placeholder contrast + general polish */
+/* Mobile-first, responsive. This file replaces the previous App.css and ensures input text is visible. */
 
 /* reset-ish */
 * { box-sizing: border-box; }
@@ -17,16 +17,87 @@ html, body, #root { height: 100%; margin: 0; font-family: Inter, Roboto, "Helvet
 
 /* controls */
 .gs-controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-.gs-input { padding: 8px 10px; border-radius: 10px; border: 1px solid #E2E6EA; background: #fff; min-width: 0; }
-.gs-input:disabled { opacity: 0.6; }
-.gs-input--sm { width: 140px; }
-.gs-input--composer { padding: 12px 14px; border-radius: 12px; outline: none; }
 
-/* buttons */
-.gs-btn { padding: 8px 12px; border-radius: 10px; border: 0; background: #E6EEF8; color: #0F172A; cursor: pointer; font-weight:600; }
-.gs-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.gs-btn--muted { background: transparent; border: 1px solid #E2E6EA; color: #334155; }
-.gs-btn--primary { background: #3A86FF; color: #fff; border-radius: 12px; padding: 10px 14px; }
+/* INPUT / TEXT color + placeholder */
+/* Make sure all input-like elements have visible text and accessible placeholder contrast */
+.gs-input,
+.gs-input:-webkit-autofill,
+.gs-input::placeholder,
+.gs-input:-ms-input-placeholder {
+  color: #0F172A;              /* primary readable text color */
+  background: #ffffff;         /* keep panel-like white background */
+  border: 1px solid #E2E6EA;
+  padding: 8px 10px;
+  border-radius: 10px;
+  outline: none;
+  font-size: 14px;
+  -webkit-text-fill-color: #0F172A; /* helps browsers that autofill with white text */
+}
+
+/* stronger visible placeholder */
+.gs-input::placeholder {
+  color: #94A3B8;
+  opacity: 1;
+}
+
+/* smaller width variant */
+.gs-input--sm { width: 140px; }
+
+/* composer input variant */
+.gs-input--composer {
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 15px;
+}
+
+/* Focus states: visible ring for keyboard users */
+.gs-input:focus {
+  box-shadow: 0 0 0 3px rgba(58, 134, 255, 0.12);
+  border-color: #3A86FF;
+}
+
+/* Disabled inputs - keep text readable but de-emphasized */
+.gs-input:disabled,
+.gs-input[aria-disabled="true"] {
+  opacity: 0.9;               /* don't hide text */
+  color: #6B7280;
+  background: #F8FAFC;
+  cursor: not-allowed;
+}
+
+/* Buttons */
+.gs-btn {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 0;
+  background: #E6EEF8;
+  color: #0F172A;
+  cursor: pointer;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.gs-btn:disabled,
+.gs-btn[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Muted / secondary */
+.gs-btn--muted {
+  background: transparent;
+  border: 1px solid #E2E6EA;
+  color: #334155;
+}
+
+/* Primary CTA */
+.gs-btn--primary {
+  background: #3A86FF;
+  color: #ffffff;
+  border-radius: 12px;
+  padding: 10px 14px;
+}
 
 /* main layout */
 .gs-main { display: grid; gap: 12px; grid-template-columns: 1fr; }
@@ -36,7 +107,6 @@ html, body, #root { height: 100%; margin: 0; font-family: Inter, Roboto, "Helvet
 .gs-chat-header { display:flex; align-items:center; justify-content:space-between; }
 .gs-chat-title { font-size: 14px; color: #0F172A; }
 .gs-mono { color:#6B7280; font-weight:500; font-size:13px; margin-left:6px; }
-.gs-part-count { color:#6B7280; font-size:13px; }
 
 /* chat box */
 .gs-chat-box {
@@ -124,4 +194,15 @@ html, body, #root { height: 100%; margin: 0; font-family: Inter, Roboto, "Helvet
   }
   .gs-composer .gs-input--composer { border-radius: 999px; }
   .gs-composer .gs-btn--primary { border-radius: 999px; }
+}
+
+/* Extra: ensure buttons' inner text color can't become white-on-white due to browser quirks */
+.gs-btn, .gs-btn * { color: inherit !important; }
+
+/* Extra: ensure autofill text is readable on WebKit */
+input:-webkit-autofill,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: #0F172A !important;
+  transition: background-color 5000s ease-in-out 0s !important;
 }
